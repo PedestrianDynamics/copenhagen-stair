@@ -6,8 +6,8 @@ __pycache__/
 .DS_Store
 # outputs and material that live elsewhere
 results/
-figures/
-media/
+figures/*.pdf
+media/*.mp4
 blog/
 photos/*
 !photos/stair_from_below.jpg

@@ -7,6 +7,10 @@ estimates) and simulated with and without the column, using three JuPedSim model
 
 Write-up: [pedestriandynamics.org/notes/copenhagen-stair](https://pedestriandynamics.org/notes/copenhagen-stair/)
 
+![Normal pace vs hurrying, as built](media/stair_speed.gif)
+
+Results: figures in `figures/`, clips in `media/` (red = closer than 10 cm to the glass).
+
 ## Run
 
 ```sh
