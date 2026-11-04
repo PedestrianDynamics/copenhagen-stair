@@ -9,4 +9,5 @@ results/
 figures/
 media/
 blog/
-photos/
+photos/*
+!photos/stair_from_below.jpg

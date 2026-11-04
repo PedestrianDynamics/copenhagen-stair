@@ -85,7 +85,7 @@ MY_PATH = [(4.5, 3.05), (1.0, 3.05), (-0.2, 2.9), (-0.55, 2.4), (-0.65, 1.5), (-
 def fig_plan():
     lay = SCENARIOS["as built"]
     fig, (a0, a1) = plt.subplots(1, 2, figsize=(12, 6.5), gridspec_kw={"width_ratios": [1, 1.5]})
-    photo = ROOT / "photos" / "stair_from_below.jpg"  # not in the repository
+    photo = ROOT / "photos" / "stair_from_below.jpg"
     a0.axis("off")
     if photo.exists():
         img = ImageOps.exif_transpose(Image.open(photo))
