@@ -116,7 +116,11 @@ def lane_waypoints(lay: Layout, direction: str) -> list[tuple[float, float]]:
     """
     lane = lay.stair_width / 4
     foot = -lay.stair_length
-    if direction == "up_right":
+    if direction == "up_left" and lay.has_column:  # too wide for the gap: round the column's left side
+        bx, by = column_bypass(lay)
+        return [(lane, foot + 1.0), (lane, -0.4), (bx, by), (bx + 0.2, by + 1.0),
+                (lay.x_right + 0.4, lay.glass_end + 0.45)]
+    if direction in ("up_right", "up_left"):
         gap_x = (lay.column_offset + lay.column_diameter / 2 + lay.x_right) / 2
         return [(lane, foot + 1.0), (lane, -0.4), (gap_x, lay.column_setback),
                 (lay.x_right + 0.4, lay.glass_end + 0.45)]

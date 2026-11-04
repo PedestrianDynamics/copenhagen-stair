@@ -36,6 +36,9 @@ class RunConfig:
     up_share: float = 0.0  # share of arrivals coming up the stair and leaving to the right
     bypass_radius: float = 0.4  # how close to the bypass waypoint counts as passed
     keep_right: bool = False  # stair lanes: down and up each keep to their right
+    luggage_share: float = 0.0  # share of people carrying luggage: wider and slower
+    luggage_radius: float = 0.30
+    luggage_speed_factor: float = 0.8
     seed: int = 0
     max_time: float = 300.0
 
@@ -50,7 +53,8 @@ def _make_model(cfg: RunConfig):
     raise ValueError(f"unknown model {cfg.model!r}")
 
 
-def _agent_params(cfg: RunConfig, pos, journey_id, stage_id, heading):
+def _agent_params(cfg: RunConfig, pos, journey_id, stage_id, heading, radius=None):
+    radius = cfg.radius if radius is None else radius
     if cfg.model == "sfm":
         return jps.SocialForceModelAgentParameters(
             position=pos,
@@ -59,7 +63,7 @@ def _agent_params(cfg: RunConfig, pos, journey_id, stage_id, heading):
             stage_id=stage_id,
             desired_speed=cfg.floor_speed,
             reaction_time=0.5,
-            radius=cfg.radius,
+            radius=radius,
         )
     if cfg.model == "warp":
         return jps.WarpDriverModelAgentParameters(
@@ -68,14 +72,14 @@ def _agent_params(cfg: RunConfig, pos, journey_id, stage_id, heading):
             journey_id=journey_id,
             stage_id=stage_id,
             desired_speed=cfg.floor_speed,
-            radius=cfg.radius,
+            radius=radius,
         )
     return jps.CollisionFreeSpeedModelAgentParameters(
         position=pos,
         journey_id=journey_id,
         stage_id=stage_id,
         desired_speed=cfg.floor_speed,
-        radius=cfg.radius,
+        radius=radius,
     )
 
 
@@ -93,24 +97,25 @@ def _free_spot(zone, occupied, rng, min_dist):
     return None
 
 
-def _set_speeds(sim, cfg: RunConfig):
+def _set_speeds(sim, cfg: RunConfig, luggage=frozenset()):
     for agent in sim.agents():
         on_stair = agent.position[1] < 0.0
-        agent.model.desired_speed = cfg.stair_speed if on_stair else cfg.floor_speed
+        speed = cfg.stair_speed if on_stair else cfg.floor_speed
+        agent.model.desired_speed = speed * (cfg.luggage_speed_factor if agent.id in luggage else 1.0)
 
 
 HEADINGS = {"right": (-1.0, 0.0), "down": (0.0, -1.0), "gallery": (1.0, 0.0), "up": (0.0, 1.0),
-            "up_right": (0.0, 1.0)}
+            "up_right": (0.0, 1.0), "up_left": (0.0, 1.0)}
 
 
 def _journey(sim, lay: Layout, direction: str, bypass_radius: float, keep_right: bool = False) -> tuple[int, int]:
     """Waypoints in order, then exit: (observed path) bypass left of the column, (keep_right) stair lanes."""
-    exit_id = sim.add_exit_stage(exit_zone(lay, direction))
+    exit_id = sim.add_exit_stage(exit_zone(lay, "up_right" if direction == "up_left" else direction))
     points = [far_side_waypoint(lay)] if keep_right and direction == "right" else []
     bypass = column_bypass(lay) if direction == "right" else None
     if bypass is not None:
         points.append(bypass)
-    if keep_right and direction in ("right", "up_right"):
+    if keep_right and direction in ("right", "up_right", "up_left"):
         points += lane_waypoints(lay, direction)
     if not points:
         return sim.add_journey(jps.JourneyDescription([exit_id])), exit_id
@@ -126,10 +131,12 @@ def _groups(sim, lay: Layout, cfg: RunConfig) -> dict:
     dirs = {"main": cfg.direction}
     if cfg.up_share > 0:
         dirs["up"] = "up_right"
+    if cfg.up_share > 0 and cfg.luggage_share > 0 and cfg.keep_right:
+        dirs["up_bag"] = "up_left"
     groups = {}
     for name, d in dirs.items():
         journey_id, stage_id = _journey(sim, lay, d, cfg.bypass_radius, cfg.keep_right)
-        zone_dir = "up" if d == "up_right" else d
+        zone_dir = "up" if d in ("up_right", "up_left") else d
         zone = spawn_zone(lay, zone_dir, cfg.spawn_centred, cfg.wide_spawn, cfg.keep_right)
         groups[name] = (journey_id, stage_id, HEADINGS[d], zone)
     return groups
@@ -146,52 +153,59 @@ def _arrival_queues(cfg: RunConfig, rng) -> dict[str, list[float]]:
     }
 
 
-def _spawn_due(sim, cfg, groups, queues, owner, t, rng):
+def _spawn_due(sim, cfg, groups, queues, owner, t, rng, luggage):
     for name, queue in queues.items():
         if not queue or queue[0] > t:
             continue
         journey_id, stage_id, heading, zone = groups[name]
         occupied = [a.position for a in sim.agents()]
-        p = _free_spot(zone, occupied, rng, 2 * cfg.radius + 0.15)
+        p = _free_spot(zone, occupied, rng, 2 * max(cfg.radius, cfg.luggage_radius) + 0.15)
         if p is None:
             continue
-        aid = sim.add_agent(_agent_params(cfg, p, journey_id, stage_id, heading))
+        bag = cfg.luggage_share > 0 and rng.random() < cfg.luggage_share
+        radius = cfg.luggage_radius if bag else cfg.radius
+        if bag and name == "up" and "up_bag" in groups:
+            journey_id, stage_id = groups["up_bag"][:2]
+        aid = sim.add_agent(_agent_params(cfg, p, journey_id, stage_id, heading, radius))
         owner[aid] = name
+        if bag:
+            luggage.add(aid)
         queue.pop(0)
 
 
 def run(lay: Layout, cfg: RunConfig) -> pd.DataFrame:
-    """Return trajectories: columns t, id, x, y, vx, vy, group."""
+    """Return trajectories: columns t, id, x, y, vx, vy, group, bag (carries luggage)."""
     rng = np.random.default_rng(cfg.seed)
     sim = jps.Simulation(model=_make_model(cfg), geometry=walkable_area(lay), dt=DT)
     groups = _groups(sim, lay, cfg)
     queues = _arrival_queues(cfg, rng)
     owner: dict[int, str] = {}
+    luggage: set[int] = set()
     rows, last_pos, failed = [], {}, False
     while any(queues.values()) or sim.agent_count() > 0:
         t = sim.iteration_count() * DT
         if t > cfg.max_time:
             break
-        _spawn_due(sim, cfg, groups, queues, owner, t, rng)
-        _set_speeds(sim, cfg)
+        _spawn_due(sim, cfg, groups, queues, owner, t, rng, luggage)
+        _set_speeds(sim, cfg, luggage)
         if sim.iteration_count() % RECORD_EVERY == 0:
-            _record(sim, t, rows, last_pos, owner)
+            _record(sim, t, rows, last_pos, owner, luggage)
         try:
             sim.iterate()
         except RuntimeError:  # SFM can push an agent through a wall
             failed = True
             break
-    df = pd.DataFrame(rows, columns=["t", "id", "x", "y", "vx", "vy", "group"])
+    df = pd.DataFrame(rows, columns=["t", "id", "x", "y", "vx", "vy", "group", "bag"])
     df.attrs["stuck"] = sim.agent_count() + sum(len(q) for q in queues.values())
     df.attrs["failed"] = failed
     return df
 
 
-def _record(sim, t, rows, last_pos, owner):
+def _record(sim, t, rows, last_pos, owner, luggage):
     dt_rec = RECORD_EVERY * DT
     for a in sim.agents():
         x, y = a.position
         px, py = last_pos.get(a.id, (x, y))
-        rows.append((t, a.id, x, y, (x - px) / dt_rec, (y - py) / dt_rec, owner[a.id]))
+        rows.append((t, a.id, x, y, (x - px) / dt_rec, (y - py) / dt_rec, owner[a.id], a.id in luggage))
         last_pos[a.id] = (x, y)
 

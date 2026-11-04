@@ -1,7 +1,7 @@
 """Animated clips of the stair head, written as MP4 and GIF to media/.
 
 Usage: .venv/bin/python scripts/make_media.py [clip ...]
-Clips: column, speed, models, crowd, counterflow (default: all).
+Clips: column, speed, models, crowd, counterflow, luggage (default: all).
 Frames are drawn with matplotlib on the dark outreach background (#0A0E14)
 and encoded with ffmpeg (palette pass for the GIF).
 """
@@ -34,6 +34,7 @@ STAIR = "#3b3129"
 GLASS = "#6fa8dc"
 AGENT = "#f2f2f2"
 UP = "#f2b84b"  # people coming up the stair
+LUGGAGE_RADIUS = 0.30  # matches RunConfig.luggage_radius
 HOT = "#ff4d4d"
 FPS = 20
 TAIL = 2.0  # seconds of trail behind each person
@@ -95,7 +96,10 @@ def draw_people(ax, lay, traj, frame, radius=0.25):
         ax.plot(g["x"], g["y"], color=AGENT, lw=1.2, alpha=0.35, zorder=6)
     for _, row in now.iterrows():
         color = HOT if row["hot"] else (UP if row["group"] == "up" else AGENT)
-        ax.add_patch(Circle((row["x"], row["y"]), radius, color=color, zorder=7))
+        r = LUGGAGE_RADIUS if row["bag"] else radius
+        ax.add_patch(Circle((row["x"], row["y"]), r, color=color, zorder=7))
+        if row["bag"]:
+            ax.add_patch(Circle((row["x"], row["y"]), 0.09, color=BG, zorder=7.5))
 
 
 def render(panels, title, name, legend="red = closer than 10 cm to the glass", gif_scale="2/3"):
@@ -166,6 +170,15 @@ def clip_crowd():
     render(panels, "A plane unloads: 80 people at 1.5 per second", "stair_crowd", gif_scale="1/2")
 
 
+def clip_luggage():
+    panels = [(name, SCENARIOS[name], simulate(SCENARIOS[name], record_every=10, n_agents=40, inflow=1.5,
+                                               up_share=0.5, luggage_share=0.5, model="cfsm", keep_right=True,
+                                               seed=9, **CROWD))
+              for name in ("as built", "no column")]
+    render(panels, "40 people, half coming up, half with luggage", "stair_luggage",
+           legend="amber = coming up   dot = luggage   red = < 10 cm to glass")
+
+
 def clip_counterflow():
     panels = [(name, SCENARIOS[name], simulate(SCENARIOS[name], n_agents=20, inflow=0.8, up_share=0.5,
                                                model="cfsm", keep_right=True, seed=0, **CROWD))
@@ -175,7 +188,7 @@ def clip_counterflow():
 
 
 CLIPS = {"column": clip_column, "speed": clip_speed, "models": clip_models,
-         "crowd": clip_crowd, "counterflow": clip_counterflow}
+         "crowd": clip_crowd, "counterflow": clip_counterflow, "luggage": clip_luggage}
 
 
 def main():

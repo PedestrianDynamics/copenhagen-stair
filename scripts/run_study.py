@@ -1,7 +1,7 @@
 """Run all simulations and write tables to results/.
 
 Usage: .venv/bin/python scripts/run_study.py [label ...]
-Labels: scenarios, sweep, direction, speed, crowd, counterflow (default: all).
+Labels: scenarios, sweep, direction, speed, crowd, counterflow, luggage (default: all).
 """
 
 from __future__ import annotations
@@ -137,6 +137,21 @@ def counterflow_jobs():
                     yield SCENARIOS[name], cfg, tags
 
 
+def luggage_jobs():
+    """Two-way flow with keep-right lanes at higher arrival rates, with and without luggage.
+
+    People with luggage are wider and slower; coming up, they pass the column on its wide side.
+    """
+    for name in ("as built", "no column"):
+        for inflow in (0.8, 1.5, 2.0):
+            for luggage in (0.0, 0.5):
+                for seed in range(10):
+                    cfg = RunConfig(model="cfsm", inflow=inflow, up_share=0.5, seed=seed, keep_right=True,
+                                    luggage_share=luggage, **{**CROWD, "n_agents": 40, "max_time": 300.0})
+                    tags = {"scenario": name, "inflow": inflow, "luggage": luggage, "seed": seed}
+                    yield SCENARIOS[name], cfg, tags
+
+
 def collect_crowd(jobs) -> pd.DataFrame:
     rows = []
     for lay, cfg, tags in jobs:
@@ -159,7 +174,7 @@ def main():
         runs.to_csv(OUT / f"{label}_runs.csv", index=False)
         agents.to_csv(OUT / f"{label}_agents.csv", index=False)
         print(f"{label}: {len(runs)} runs, {runs['stuck'].sum()} stuck agents, {runs['failed'].sum()} failed runs")
-    for label, jobs in (("crowd", crowd_jobs()), ("counterflow", counterflow_jobs())):
+    for label, jobs in (("crowd", crowd_jobs()), ("counterflow", counterflow_jobs()), ("luggage", luggage_jobs())):
         if len(sys.argv) > 1 and label not in sys.argv[1:]:
             continue
         runs = collect_crowd(jobs)

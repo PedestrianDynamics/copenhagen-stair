@@ -275,6 +275,32 @@ def fig_crowd():
     save(fig, "fig6_crowd")
 
 
+def fig_luggage():
+    runs = pd.read_csv(RES / "luggage_runs.csv")
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), sharey=True)
+    for ax, (luggage, title) in zip(axes, ((0.0, "Nobody carries luggage"), (0.5, "Half carry luggage")), strict=True):
+        sub = runs[runs["luggage"] == luggage]
+        for name, ls, mfc in (("as built", "-", COLORS["as built"]), ("no column", "--", "white")):
+            g = sub[sub["scenario"] == name].groupby("inflow")["clear_time"]
+            m, lo, hi = g.median(), g.quantile(0.25), g.quantile(0.75)
+            ax.errorbar(m.index, m.values, yerr=[m - lo, hi - m], color=COLORS[name], marker="o", ms=6, lw=1.8,
+                        ls=ls, mfc=mfc, capsize=3, label=name)
+        ax.set_xticks([0.8, 1.5, 2.0])
+        ax.set_xlabel("arrival rate (persons/s)")
+        ax.set_title(title, loc="left", fontsize=11)
+        ax.grid(alpha=0.7, lw=1, axis="y", color="#eaeaf2")
+        despine(ax)
+    axes[0].set_ylim(0, runs.groupby(["luggage", "scenario", "inflow"])["clear_time"].quantile(0.75).max() * 1.1)
+    axes[1].text(0.85, 97, "as built, people coming up with luggage cross over\nto pass the column on its wide side",
+                 color="dimgrey", fontsize=9)
+    axes[0].set_ylabel("time until all 40 are through (s)")
+    axes[0].legend(loc="lower left", fontsize=9)
+    fig.suptitle("Two-way flow, everyone keeping right (collision-free speed model, 10 runs, median and middle half)",
+                 x=0.06, ha="left", fontsize=12, color="#333333")
+    fig.tight_layout()
+    save(fig, "fig7_luggage")
+
+
 def fig_sweep():
     runs = pd.read_csv(RES / "sweep_runs.csv")
     base = Layout()
@@ -318,6 +344,7 @@ def main():
     fig_speed()
     fig_models()
     fig_crowd()
+    fig_luggage()
     fig_sweep()
 
 
