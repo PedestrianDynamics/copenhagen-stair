@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+# outputs and material that live elsewhere
+results/
+figures/
+media/
+blog/
+photos/
