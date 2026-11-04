@@ -8,7 +8,15 @@ import jupedsim as jps
 import numpy as np
 import pandas as pd
 
-from kopenhagen.geometry import Layout, column_bypass, exit_zone, spawn_zone, walkable_area
+from kopenhagen.geometry import (
+    Layout,
+    column_bypass,
+    exit_zone,
+    far_side_waypoint,
+    lane_waypoints,
+    spawn_zone,
+    walkable_area,
+)
 
 DT = 0.01
 RECORD_EVERY = 10  # 0.1 s
@@ -27,6 +35,7 @@ class RunConfig:
     wide_spawn: bool = False  # larger arrival area on the right, for crowds
     up_share: float = 0.0  # share of arrivals coming up the stair and leaving to the right
     bypass_radius: float = 0.4  # how close to the bypass waypoint counts as passed
+    keep_right: bool = False  # stair lanes: down and up each keep to their right
     seed: int = 0
     max_time: float = 300.0
 
@@ -94,16 +103,22 @@ HEADINGS = {"right": (-1.0, 0.0), "down": (0.0, -1.0), "gallery": (1.0, 0.0), "u
             "up_right": (0.0, 1.0)}
 
 
-def _journey(sim, lay: Layout, direction: str, bypass_radius: float) -> tuple[int, int]:
-    """Exit only, or (observed path) bypass waypoint left of the column, then exit."""
+def _journey(sim, lay: Layout, direction: str, bypass_radius: float, keep_right: bool = False) -> tuple[int, int]:
+    """Waypoints in order, then exit: (observed path) bypass left of the column, (keep_right) stair lanes."""
     exit_id = sim.add_exit_stage(exit_zone(lay, direction))
+    points = [far_side_waypoint(lay)] if keep_right and direction == "right" else []
     bypass = column_bypass(lay) if direction == "right" else None
-    if bypass is None:
+    if bypass is not None:
+        points.append(bypass)
+    if keep_right and direction in ("right", "up_right"):
+        points += lane_waypoints(lay, direction)
+    if not points:
         return sim.add_journey(jps.JourneyDescription([exit_id])), exit_id
-    wp_id = sim.add_waypoint_stage(bypass, bypass_radius)
-    journey = jps.JourneyDescription([wp_id, exit_id])
-    journey.set_transition_for_stage(wp_id, jps.Transition.create_fixed_transition(exit_id))
-    return sim.add_journey(journey), wp_id
+    stages = [sim.add_waypoint_stage(p, bypass_radius) for p in points] + [exit_id]
+    journey = jps.JourneyDescription(stages)
+    for a, b in zip(stages, stages[1:], strict=False):
+        journey.set_transition_for_stage(a, jps.Transition.create_fixed_transition(b))
+    return sim.add_journey(journey), stages[0]
 
 
 def _groups(sim, lay: Layout, cfg: RunConfig) -> dict:
@@ -113,9 +128,9 @@ def _groups(sim, lay: Layout, cfg: RunConfig) -> dict:
         dirs["up"] = "up_right"
     groups = {}
     for name, d in dirs.items():
-        journey_id, stage_id = _journey(sim, lay, d, cfg.bypass_radius)
+        journey_id, stage_id = _journey(sim, lay, d, cfg.bypass_radius, cfg.keep_right)
         zone_dir = "up" if d == "up_right" else d
-        zone = spawn_zone(lay, zone_dir, cfg.spawn_centred, cfg.wide_spawn)
+        zone = spawn_zone(lay, zone_dir, cfg.spawn_centred, cfg.wide_spawn, cfg.keep_right)
         groups[name] = (journey_id, stage_id, HEADINGS[d], zone)
     return groups
 

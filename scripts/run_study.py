@@ -124,14 +124,15 @@ def crowd_jobs():
 
 
 def counterflow_jobs():
-    """A few people come up the stair while others go down (10 people: no jams without the column
-    for the social force model and WarpDriver)."""
-    small = {**CROWD, "n_agents": 10, "max_time": 200.0}
-    for model in MODELS:
+    """Some people come up the stair while others go down, everyone keeping right. Collision-free
+    speed model only: the social force model and WarpDriver jam in the 65 cm gap, which real people
+    pass sideways."""
+    small = {**CROWD, "n_agents": 20, "max_time": 200.0}
+    for model in ("cfsm",):
         for name in ("as built", "no column"):
             for up_share in (0.25, 0.5):
                 for seed in range(10):
-                    cfg = RunConfig(model=model, inflow=0.8, up_share=up_share, seed=seed, **small)
+                    cfg = RunConfig(model=model, inflow=0.8, up_share=up_share, seed=seed, keep_right=True, **small)
                     tags = {"model": model, "scenario": name, "up_share": up_share, "seed": seed}
                     yield SCENARIOS[name], cfg, tags
 

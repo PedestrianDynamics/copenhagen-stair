@@ -108,7 +108,28 @@ def column_bypass(lay: Layout) -> tuple[float, float] | None:
     return (lay.column_offset - r - 0.45, lay.column_setback)
 
 
-def spawn_zone(lay: Layout, direction: str, centred: bool = False, wide: bool = False) -> Polygon:
+def lane_waypoints(lay: Layout, direction: str) -> list[tuple[float, float]]:
+    """Keep-right checkpoints: on the stair, down on the -x half and up on the +x half.
+
+    People coming up keep right past the column, through the gap to the right glass, and
+    round the end of the right glass on its near side; people going down pass it on the far side.
+    """
+    lane = lay.stair_width / 4
+    foot = -lay.stair_length
+    if direction == "up_right":
+        gap_x = (lay.column_offset + lay.column_diameter / 2 + lay.x_right) / 2
+        return [(lane, foot + 1.0), (lane, -0.4), (gap_x, lay.column_setback),
+                (lay.x_right + 0.4, lay.glass_end + 0.45)]
+    return [(-lane, lay.column_setback), (-lane, -0.8), (-lane, foot + 1.0)]
+
+
+def far_side_waypoint(lay: Layout) -> tuple[float, float]:
+    """Where people going down round the end of the right glass when keeping right."""
+    return (lay.x_right + 0.4, min(lay.glass_end + 1.4, lay.floor_depth - 0.4))
+
+
+def spawn_zone(lay: Layout, direction: str, centred: bool = False, wide: bool = False,
+               keep_right: bool = False) -> Polygon:
     top = lay.floor_depth
     x1 = lay.x_right + lay.right_floor_length
     if direction == "right" and wide:
@@ -124,6 +145,8 @@ def spawn_zone(lay: Layout, direction: str, centred: bool = False, wide: bool = 
         x0 = lay.x_gallery_end
         return box(x0 + 0.3, 0.3, x0 + 2.3, 2.3)
     foot = -lay.stair_length
+    if keep_right:
+        return box(0.15, foot + 0.3, lay.x_right - 0.3, foot + 1.5)
     return box(lay.x_left + 0.3, foot + 0.3, lay.x_right - 0.3, foot + 1.5)
 
 

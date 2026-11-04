@@ -40,3 +40,13 @@ def test_step_entry_angle_of_diagonal_walker():
                          "vx": [1.0, 1.0], "vy": [-1.0, -1.0]})
     entry = step_entry(traj)
     assert entry.loc[1, "entry_angle"] == pytest.approx(45.0)
+
+
+def test_keep_right_lanes_separate_up_and_down_on_the_stair():
+    cfg = RunConfig(model="cfsm", n_agents=10, inflow=0.8, up_share=0.5, seed=0, bypass_radius=0.8,
+                    wide_spawn=True, keep_right=True, max_time=120)
+    traj = run(SCENARIOS["as built"], cfg)
+    assert traj.attrs["stuck"] == 0
+    mid = traj[(traj["y"] < -1.0) & (traj["y"] > -3.0)]
+    assert (mid[mid["group"] == "main"]["x"] < 0).mean() > 0.9
+    assert (mid[mid["group"] == "up"]["x"] > 0).mean() > 0.9

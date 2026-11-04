@@ -84,14 +84,15 @@ MY_PATH = [(4.5, 3.05), (1.0, 3.05), (-0.2, 2.9), (-0.55, 2.4), (-0.65, 1.5), (-
 
 def fig_plan():
     lay = SCENARIOS["as built"]
-    fig, (a0, a1) = plt.subplots(1, 2, figsize=(12, 6.5), gridspec_kw={"width_ratios": [1, 1.5]})
-    photo = ROOT / "photos" / "stair_from_below.jpg"
+    fig, (a0, a1) = plt.subplots(2, 1, figsize=(10, 13), gridspec_kw={"height_ratios": [1, 1.1]})
+    photo = ROOT / "photos" / "stair_column.jpg"
     a0.axis("off")
     if photo.exists():
         img = ImageOps.exif_transpose(Image.open(photo))
-        img.thumbnail((1400, 1400))
+        img.thumbnail((2400, 2400))
         a0.imshow(img)
-        a0.set_title("The stair, seen from below", loc="left", fontsize=12)
+        a0.set_title("The column at the top of the stair: walking up to it (left), from below (right)",
+                     loc="left", fontsize=12)
 
     draw_plan(a1, lay)
     g = gaps(lay)

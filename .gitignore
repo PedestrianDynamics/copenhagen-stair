@@ -11,3 +11,4 @@ media/*.mp4
 blog/
 photos/*
 !photos/stair_from_below.jpg
+!photos/stair_column.jpg

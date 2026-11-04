@@ -167,10 +167,10 @@ def clip_crowd():
 
 
 def clip_counterflow():
-    panels = [(name, SCENARIOS[name], simulate(SCENARIOS[name], n_agents=10, inflow=0.8, up_share=0.25,
-                                               model="warp", seed=0, **CROWD))
+    panels = [(name, SCENARIOS[name], simulate(SCENARIOS[name], n_agents=20, inflow=0.8, up_share=0.5,
+                                               model="cfsm", keep_right=True, seed=0, **CROWD))
               for name in ("as built", "no column")]
-    render(panels, "10 people, some coming up (WarpDriver)", "stair_counterflow",
+    render(panels, "20 people keeping right, half coming up (collision-free speed model)", "stair_counterflow_v2",
            legend="amber = coming up   red = closer than 10 cm to the glass")
 
 
